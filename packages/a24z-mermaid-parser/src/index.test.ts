@@ -143,6 +143,21 @@ describe('@a24z/mermaid-parser', () => {
     expect(result.error).toBeDefined();
   });
 
+  test('parse returns verbose diagnostics for invalid flowchart click syntax', async () => {
+    const result = await parse(`
+      graph TD
+        A[Start] --> B[Process]
+        click "src/hooks/use-mobile.tsx" "src/hooks/use-mobile.tsx"
+    `);
+
+    expect(result.valid).toBe(false);
+    expect(result.type).toBe('flowchart');
+    expect(result.error).toBeDefined();
+    expect(result.errors).toBeDefined();
+    expect(result.errors && result.errors[0].code).toBe('FLOWCHART_CLICK_TARGET_QUOTED');
+    expect(result.errors && result.errors[0].line).toBeDefined();
+  });
+
   test('isSupported checks diagram types', () => {
     expect(isSupported('flowchart')).toBe(true);
     expect(isSupported('sequence')).toBe(true);

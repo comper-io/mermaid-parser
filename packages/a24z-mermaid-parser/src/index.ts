@@ -19,12 +19,42 @@ export interface ParseResult {
   warnings?: string[];
 }
 
+export interface Diagnostic {
+  severity: 'error' | 'warning';
+  code?: string;
+  message: string;
+  /**
+   * 1-based line number in the *processed* diagram (i.e. after directive/comment stripping).
+   */
+  line?: number;
+  /**
+   * 1-based column number in the *processed* diagram line.
+   */
+  column?: number;
+  /**
+   * The original line text (from the processed diagram) for easier debugging.
+   */
+  lineText?: string;
+}
+
 export interface DetailedParseResult {
   type: string;
   config?: any;
   valid: boolean;
   error?: string;
+  errors?: Diagnostic[];
   warnings?: string[];
+}
+
+export class MermaidValidationError extends Error {
+  constructor(
+    message: string,
+    public diagramType: string,
+    public diagnostics: Diagnostic[] = []
+  ) {
+    super(message);
+    this.name = 'MermaidValidationError';
+  }
 }
 
 /**
@@ -200,25 +230,57 @@ function checkNodeLabels(text: string, diagramType: string): string[] {
   return warnings;
 }
 
+function validateFlowchartSyntax(text: string): { valid: boolean; errors: Diagnostic[] } {
+  const errors: Diagnostic[] = [];
+
+  // 1) Targeted check: invalid click syntax
+  // Mermaid flowchart syntax expects: click <nodeId> "<url>" ["<tooltip>"]
+  // A quoted nodeId (click "something" ...) is invalid.
+  const lines = text.split('\n');
+  for (let i = 0; i < lines.length; i++) {
+    const lineText = lines[i];
+    const trimmed = lineText.trim();
+    if (!trimmed.startsWith('click')) continue;
+
+    // Must be `click <something...>`
+    const afterClick = trimmed.slice('click'.length).trimStart();
+    if (afterClick.startsWith('"') || afterClick.startsWith("'")) {
+      const colIdx = lineText.indexOf(afterClick[0]);
+      errors.push({
+        severity: 'error',
+        code: 'FLOWCHART_CLICK_TARGET_QUOTED',
+        message:
+          'Invalid flowchart click syntax: the click target must be an unquoted node id (e.g. `click NodeId "url"`), not a quoted string.',
+        line: i + 1,
+        column: colIdx >= 0 ? colIdx + 1 : undefined,
+        lineText,
+      });
+    }
+  }
+
+  // 2) Existing coarse checks (kept for speed/coverage)
+  const hasNodes = /\w+\s*(\[|\(|\{)/.test(text);
+  const hasArrows = /\w+\s*-+>+\s*\w+/.test(text);
+  const hasValidArrowSyntax = !/[<>]{3,}/.test(text); // Avoid invalid arrow syntax
+
+  const valid = errors.length === 0 && (hasNodes || hasArrows) && hasValidArrowSyntax;
+  if (!valid && errors.length === 0) {
+    errors.push({
+      severity: 'error',
+      code: 'FLOWCHART_SYNTAX_INVALID',
+      message: 'Invalid flowchart diagram syntax.',
+    });
+  }
+
+  return { valid, errors };
+}
+
 /**
  * Basic syntax validation for different diagram types
  */
 const SYNTAX_VALIDATORS = {
   flowchart: (text: string) => {
-    // Basic flowchart validation - look for nodes or arrows
-    const hasNodes = /\w+\s*(\[|\(|\{)/.test(text);
-    const hasArrows = /\w+\s*-+>+\s*\w+/.test(text);
-    const hasValidSyntax = !/[<>]{3,}/.test(text); // Avoid invalid arrow syntax
-    
-    // Check for invalid click syntax: click statement should start with an identifier, not a quoted string
-    // Valid: click NodeId "url"
-    // Invalid: click "url" "url"
-    const hasInvalidClick = /^\s*click\s+["']/.test(text) || /\n\s*click\s+["']/.test(text);
-    if (hasInvalidClick) {
-      return false;
-    }
-    
-    return (hasNodes || hasArrows) && hasValidSyntax;
+    return validateFlowchartSyntax(text).valid;
   },
   
   sequence: (text: string) => {
@@ -288,12 +350,21 @@ export async function validate(
       throw new Error('Unknown diagram type');
     }
 
+    // Run richer validation when we can (currently: flowchart)
+    if (type === 'flowchart') {
+      const outcome = validateFlowchartSyntax(processed.code);
+      if (!outcome.valid) {
+        const first = outcome.errors[0];
+        throw new MermaidValidationError(first?.message ?? 'Invalid flowchart diagram syntax', type, outcome.errors);
+      }
+    }
+
     // Run basic syntax validation
     const validator = SYNTAX_VALIDATORS[type as keyof typeof SYNTAX_VALIDATORS] || SYNTAX_VALIDATORS.default;
     const isValid = validator(processed.code);
     
     if (!isValid) {
-      throw new Error(`Invalid ${type} diagram syntax`);
+      throw new MermaidValidationError(`Invalid ${type} diagram syntax`, type);
     }
 
     // Check for potential rendering issues
@@ -316,6 +387,8 @@ export async function validate(
  * Parse a diagram and return detailed information
  */
 export async function parse(text: string): Promise<DetailedParseResult> {
+  const processed = preprocessDiagram(text);
+  const detectedType = detectType(processed.code);
   try {
     const result = await validate(text, { suppressErrors: false });
     if (result) {
@@ -331,8 +404,18 @@ export async function parse(text: string): Promise<DetailedParseResult> {
       valid: false,
     };
   } catch (error) {
+    if (error instanceof MermaidValidationError) {
+      return {
+        type: error.diagramType || (detectedType === 'unknown' ? 'unknown' : detectedType),
+        config: processed.config,
+        valid: false,
+        error: error.message,
+        errors: error.diagnostics?.length ? error.diagnostics : undefined,
+      };
+    }
     return {
-      type: 'unknown',
+      type: detectedType === 'unknown' ? 'unknown' : detectedType,
+      config: processed.config,
       valid: false,
       error: error instanceof Error ? error.message : String(error),
     };
