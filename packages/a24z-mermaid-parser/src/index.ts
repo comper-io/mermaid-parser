@@ -209,6 +209,15 @@ const SYNTAX_VALIDATORS = {
     const hasNodes = /\w+\s*(\[|\(|\{)/.test(text);
     const hasArrows = /\w+\s*-+>+\s*\w+/.test(text);
     const hasValidSyntax = !/[<>]{3,}/.test(text); // Avoid invalid arrow syntax
+    
+    // Check for invalid click syntax: click statement should start with an identifier, not a quoted string
+    // Valid: click NodeId "url"
+    // Invalid: click "url" "url"
+    const hasInvalidClick = /^\s*click\s+["']/.test(text) || /\n\s*click\s+["']/.test(text);
+    if (hasInvalidClick) {
+      return false;
+    }
+    
     return (hasNodes || hasArrows) && hasValidSyntax;
   },
   

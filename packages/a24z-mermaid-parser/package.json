@@ -1,6 +1,6 @@
 {
   "name": "@comper/mermaid-parser",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Lightweight Mermaid diagram validator for server-side environments - validation without rendering",
   "type": "module",
   "main": "./dist/index.js",

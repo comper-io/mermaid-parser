@@ -256,4 +256,50 @@ describe('@a24z/mermaid-parser', () => {
     // Log the actual result for inspection
     console.log('Complex flowchart validation result:', JSON.stringify(result, null, 2));
   });
+
+  test('validates flowchart with valid click syntax', async () => {
+    const result = await validate(`
+      graph TD
+        A[Start] --> B[Process]
+        click A "https://example.com"
+        click B "https://example.com/process" "Visit Process"
+    `);
+    
+    expect(result).toBeTruthy();
+    expect(result && result.diagramType).toBe('flowchart');
+  });
+
+  test('rejects flowchart with invalid click syntax (string literal instead of identifier)', async () => {
+    const result = await validate(`
+      graph TD
+        A[Start] --> B[Process]
+        click UIComp "src/components/ui/"
+        click DadButton "src/components/DadButton.tsx"
+        click Hooks "src/hooks/"
+        click "src/hooks/use-mobile.tsx" "src/hooks/use-mobile.tsx"
+        click ToastLogic "src/hooks/use-toast.ts"
+    `, { suppressErrors: true });
+    
+    expect(result).toBe(false);
+  });
+
+  test('rejects flowchart with click syntax starting with double quotes', async () => {
+    const result = await validate(`
+      graph TD
+        A[Node]
+        click "invalid" "url"
+    `, { suppressErrors: true });
+    
+    expect(result).toBe(false);
+  });
+
+  test('rejects flowchart with click syntax starting with single quotes', async () => {
+    const result = await validate(`
+      graph TD
+        A[Node]
+        click 'invalid' 'url'
+    `, { suppressErrors: true });
+    
+    expect(result).toBe(false);
+  });
 });
