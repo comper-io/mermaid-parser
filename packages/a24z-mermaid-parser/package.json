@@ -1,5 +1,5 @@
 {
-  "name": "@a24z/mermaid-parser",
+  "name": "@comper/mermaid-parser",
   "version": "1.0.1",
   "description": "Lightweight Mermaid diagram validator for server-side environments - validation without rendering",
   "type": "module",
@@ -35,14 +35,14 @@
   ],
   "repository": {
     "type": "git",
-    "url": "https://github.com/your-username/mermaid-parser",
+    "url": "https://github.com/comper-io/mermaid-parser",
     "directory": "packages/a24z-mermaid-parser"
   },
-  "homepage": "https://github.com/your-username/mermaid-parser/tree/main/packages/a24z-mermaid-parser#readme",
+  "homepage": "https://github.com/comper-io/mermaid-parser/tree/main/packages/a24z-mermaid-parser#readme",
   "bugs": {
-    "url": "https://github.com/your-username/mermaid-parser/issues"
+    "url": "https://github.com/comper-io/mermaid-parser/issues"
   },
-  "author": "A24Z",
+  "author": "A24Z - fork by Comper",
   "license": "MIT",
   "engines": {
     "node": ">=18.0.0"
@@ -55,6 +55,7 @@
     "dev": "bun run scripts/build.ts --watch"
   },
   "dependencies": {
+    "bun": "^1.3.5",
     "js-yaml": "^4.1.0"
   },
   "devDependencies": {
@@ -65,7 +66,5 @@
   "publishConfig": {
     "access": "public",
     "registry": "https://registry.npmjs.org/"
-  },
-  "peerDependencies": {},
-  "optionalDependencies": {}
+  }
 }
